@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 5s
+
+  external_labels:
+    monitor: "iot_web_api"
+
+rule_files:
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["prometheus:9090"]
+
+  - job_name: "iot_web_api_scraper"
+    static_configs:
+      - targets: ["iot_web_api:5010"]

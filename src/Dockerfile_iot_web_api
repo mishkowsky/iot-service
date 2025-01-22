@@ -1,0 +1,16 @@
+FROM python:3.12-slim
+
+WORKDIR /src
+
+ENV PYTHONPATH="${PYTHONPATH}:/src"
+
+COPY ./requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ./iot_web_api /src/iot_web_api
+COPY ./dao /src/dao
+COPY ./model /src/model
+
+EXPOSE 5010
+
+CMD ["python", "./iot_web_api/controller.py"]

@@ -1,0 +1,6 @@
+.venv
+logs
+data
+*/logs/*
+sandbox.py
+.idea

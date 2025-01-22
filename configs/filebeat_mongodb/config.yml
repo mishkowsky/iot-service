@@ -1,0 +1,12 @@
+filebeat:
+  inputs:
+    fields:
+      service: mongodb
+  modules:
+    - module: mongodb
+      log:
+        enabled: true
+        var.paths: [ "/logs/mongodb/*.log*" ]
+
+output.logstash:
+  hosts: ["logstash:5044"]

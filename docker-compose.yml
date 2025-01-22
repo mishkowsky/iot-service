@@ -1,0 +1,232 @@
+version: '3.8'
+
+services:
+  iot_web_api:
+    build:
+      context: ./src
+      dockerfile: ./Dockerfile_iot_web_api
+    env_file: .env
+    ports:
+      - 5010:5010
+    volumes:
+      - ./logs:/src/logs
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+    networks:
+      app-network:
+        aliases:
+          - iot_web_api
+
+  rule_engine:
+    build:
+      context: ./src
+      dockerfile: ./Dockerfile_rule_engine
+    env_file: .env
+    volumes:
+      - ./logs:/src/logs
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+    networks:
+      app-network:
+        aliases:
+          - rule_engine
+
+  mongodb:
+    image: mongo:latest
+    ports:
+      - 27017:27017
+    volumes:
+      - ./logs/mongodb:/logs/
+      - ./data/db:/data/db
+    command: ['--logpath', '/logs/logs.txt']
+    networks:
+      app-network:
+        aliases:
+          - mongodb
+
+  rabbitmq:
+    image: rabbitmq:management
+    ports:
+      - 5672:5672
+      - 15672:15672
+    networks:
+      app-network:
+        aliases:
+          - rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./configs/prometheus/config.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - 9090:9090
+    depends_on:
+      - iot_web_api
+    networks:
+      app-network:
+        aliases:
+          - prometheus
+
+  grafana:
+    image: grafana/grafana
+    ports:
+      - 3000:3000
+    volumes:
+      - ./configs/grafana/config.ini:/etc/grafana/grafana.ini
+      - ./configs/grafana/datasource.yaml:/etc/grafana/provisioning/datasources/default.yaml
+      - ./configs/grafana/dashboard.yaml:/etc/grafana/provisioning/dashboards/default.yaml
+      - ./configs/grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    networks:
+      app-network:
+        aliases:
+          - grafana
+
+  setup:
+    profiles:
+      - setup
+    build:
+      context: ./configs/elk_setup/
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    init: true
+    volumes:
+      - ./configs/elk_setup/entrypoint.sh:/entrypoint.sh:ro,Z
+      - ./configs/elk_setup/lib.sh:/lib.sh:ro,Z
+      - ./configs/elk_setup/roles:/roles:ro,Z
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+      METRICBEAT_INTERNAL_PASSWORD: ${METRICBEAT_INTERNAL_PASSWORD:-}
+      FILEBEAT_INTERNAL_PASSWORD: ${FILEBEAT_INTERNAL_PASSWORD:-}
+      HEARTBEAT_INTERNAL_PASSWORD: ${HEARTBEAT_INTERNAL_PASSWORD:-}
+      MONITORING_INTERNAL_PASSWORD: ${MONITORING_INTERNAL_PASSWORD:-}
+      BEATS_SYSTEM_PASSWORD: ${BEATS_SYSTEM_PASSWORD:-}
+    networks:
+      - app-network
+    depends_on:
+      - elasticsearch
+
+  elasticsearch:
+    image: elasticsearch:8.17.1
+    volumes:
+      - ./configs/elasticsearch/config.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,Z
+      - ./data/elasticsearch:/usr/share/elasticsearch/data:Z
+    ports:
+      - 9200:9200
+      - 9300:9300
+    environment:
+      node.name: elasticsearch
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-}
+      discovery.type: single-node
+      cluster.routing.allocation.disk.threshold_enabled: false
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  logstash:
+    image: logstash:8.17.1
+    volumes:
+      - ./configs/logstash/config.yml:/usr/share/logstash/config/logstash.yml:ro,Z
+      - ./configs/logstash/pipeline:/usr/share/logstash/pipeline:ro,Z
+    ports:
+      - 5044:5044
+      - 50000:50000/tcp
+      - 50000:50000/udp
+      - 9600:9600
+    environment:
+      LS_JAVA_OPTS: -Xms256m -Xmx256m
+      LOGSTASH_INTERNAL_PASSWORD: ${LOGSTASH_INTERNAL_PASSWORD:-}
+    networks:
+      - app-network
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+  kibana:
+    image: kibana:8.17.1
+    volumes:
+      - ./configs/kibana/config.yml:/usr/share/kibana/config/kibana.yml:ro,Z
+    ports:
+      - 5601:5601
+    environment:
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD:-}
+    networks:
+      - app-network
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+  beat_iot_web_api:
+    image: elastic/filebeat:8.17.1
+    user: root
+    command:
+      - -e
+      - --strict.perms=false
+    volumes:
+      - ./configs/filebeat_iot_web_api/config.yml:/usr/share/filebeat/filebeat.yml:ro,Z
+      - ./logs/iot_web_api/:/logs/:ro
+    environment:
+      FILEBEAT_INTERNAL_PASSWORD: ${FILEBEAT_INTERNAL_PASSWORD:-}
+      BEATS_SYSTEM_PASSWORD: ${BEATS_SYSTEM_PASSWORD:-}
+    networks:
+      - app-network
+    depends_on:
+      - elasticsearch
+
+
+  beat_rule_engine:
+    image: elastic/filebeat:8.17.1
+    user: root
+    command:
+      - -e
+      - --strict.perms=false
+    volumes:
+      - ./configs/filebeat_rule_engine/config.yml:/usr/share/filebeat/filebeat.yml:ro,Z
+      - ./logs/rule_engine/:/logs/:ro
+    environment:
+      FILEBEAT_INTERNAL_PASSWORD: ${FILEBEAT_INTERNAL_PASSWORD:-}
+      BEATS_SYSTEM_PASSWORD: ${BEATS_SYSTEM_PASSWORD:-}
+    networks:
+      - app-network
+    depends_on:
+      - elasticsearch
+
+  beat_mongodb:
+    image: elastic/filebeat:8.17.1
+    depends_on:
+      - elasticsearch
+      - mongodb
+    volumes:
+      - ./configs/filebeat_mongodb/config.yml:/usr/share/filebeat/filebeat.yml
+      - ./logs/mongodb/:/logs/mongodb/:ro
+    networks:
+      app-network:
+        aliases:
+          - beat_mongodb
+
+volumes:
+  elasticsearch:
+  mongo_data:
+  es_data:
+
+networks:
+  app-network:
+    driver: bridge

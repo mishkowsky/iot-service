@@ -1,0 +1,43 @@
+{
+  "cluster": [
+    "manage_index_templates",
+    "monitor",
+    "manage_ilm"
+  ],
+  "indices": [
+    {
+      "names": [
+        "logs-generic-default",
+        "logstash-*",
+        "ecs-logstash-*"
+      ],
+      "privileges": [
+        "write",
+        "create",
+        "create_index",
+        "manage",
+        "manage_ilm"
+      ]
+    },
+    {
+      "names": [
+        "logstash",
+        "ecs-logstash"
+      ],
+      "privileges": [
+        "write",
+        "manage"
+      ]
+    },
+        {
+      "names": [
+        "logs-iot-web-api-*",
+        "logs-rule-engine-*",
+        "logs-mongodb-*"
+      ],
+      "privileges": [
+        "all"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+filebeat.inputs:
+  - type: filestream
+    id: iot_web_api_logs
+    paths:
+      - /logs/logs.log
+    parsers:
+      - ndjson:
+          target: ""
+          add_error_key: false
+          message_key: text
+    fields:
+      service: iot-web-api
+
+output.logstash:
+  hosts: ["logstash:5044"]

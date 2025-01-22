@@ -1,0 +1,16 @@
+FROM python:3.12-slim
+
+RUN pip install --upgrade pip
+
+WORKDIR /src
+
+ENV PYTHONPATH="${PYTHONPATH}:/src"
+
+COPY ./requirements.txt /src
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ./rule_engine /src/rule_engine
+COPY ./dao /src/dao
+COPY ./model /src/model
+
+CMD ["python", "./rule_engine/rule_engine.py"]

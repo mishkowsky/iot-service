@@ -1,0 +1,15 @@
+filebeat.inputs:
+  - type: filestream
+    id: rule-engine-logs
+    paths:
+      - /logs/logs.log
+    parsers:
+      - ndjson:
+          target: ""
+          add_error_key: false
+          message_key: text
+    fields:
+      service: rule-engine
+
+output.logstash:
+  hosts: ["logstash:5044"]
