@@ -15,6 +15,10 @@ services:
         condition: service_healthy
       mongodb:
         condition: service_started
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
     networks:
       app-network:
         aliases:
@@ -32,6 +36,10 @@ services:
         condition: service_healthy
       mongodb:
         condition: service_started
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
     networks:
       app-network:
         aliases:
@@ -45,6 +53,9 @@ services:
       - ./logs/mongodb:/logs/
       - ./data/db:/data/db
     command: ['--logpath', '/logs/logs.txt']
+    deploy:
+      restart_policy:
+        condition: on-failure[:5]
     networks:
       app-network:
         aliases:
@@ -64,6 +75,9 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    deploy:
+      restart_policy:
+        condition: on-failure[:5]
 
   prometheus:
     image: prom/prometheus
@@ -189,6 +203,7 @@ services:
     networks:
       - app-network
     depends_on:
+      - iot_web_api
       - elasticsearch
 
 
@@ -207,10 +222,17 @@ services:
     networks:
       - app-network
     depends_on:
+      - rule_engine
       - elasticsearch
 
   beat_mongodb:
     image: elastic/filebeat:8.17.1
+    command:
+      - -e
+      - --strict.perms=false
+    environment:
+      FILEBEAT_INTERNAL_PASSWORD: ${FILEBEAT_INTERNAL_PASSWORD:-}
+      BEATS_SYSTEM_PASSWORD: ${BEATS_SYSTEM_PASSWORD:-}
     depends_on:
       - elasticsearch
       - mongodb
